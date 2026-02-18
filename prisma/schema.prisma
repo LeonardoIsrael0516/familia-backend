@@ -1,0 +1,429 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  user
+  admin
+}
+
+enum ProductType {
+  devocional
+  kit
+  curso
+  outro
+}
+
+enum ContentType {
+  ebook
+  video
+  native
+}
+
+enum KitSectionKey {
+  planner
+  worship_guide
+  verse_library
+}
+
+enum StreakType {
+  devocional
+}
+
+enum NotificationType {
+  devocional_reminder
+}
+
+enum PeriodType {
+  monthly
+  semiannual
+  annual
+}
+
+enum SubscriptionStatus {
+  active
+  expired
+  cancelled
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String
+  passwordHash String    @map("password_hash")
+  role         Role      @default(user)
+  avatarUrl    String?   @map("avatar_url")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  refreshTokens         RefreshToken[]
+  posts                Post[]
+  comments             Comment[]
+  postLikes            PostLike[]
+  devocionalProgress   UserDevocionalProgress[]
+  kitProgress          UserKitProgress[]
+  streaks              UserStreak[]
+  badges               UserBadge[]
+  notificationPrefs    NotificationPreference[]
+  subscriptions        Subscription[]
+  pushSubscriptions    PushSubscription[]
+  passwordResetTokens  PasswordResetToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   // hash do token
+  expiresAt DateTime @map("expires_at")
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Product {
+  id          String      @id @default(uuid())
+  title       String
+  slug        String      @unique
+  type        ProductType
+  price       Decimal     @db.Decimal(10, 2)
+  badge       String?
+  tag         String?
+  description String?
+  imageUrl    String?     @map("image_url")
+  checkoutUrl String?     @map("checkout_url")
+  comingSoon  Boolean     @default(false) @map("coming_soon")
+  active      Boolean     @default(true)
+  sortOrder   Int         @default(0) @map("sort_order")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  contentItems           ContentItem[]
+  devocionalDays         DevocionalDay[]
+  kitSections            KitSection[]
+  courseModules          CourseModule[]
+  badges                 Badge[]
+  userDevocionalProgress UserDevocionalProgress[]
+  userKitProgress        UserKitProgress[]
+  userStreaks            UserStreak[]
+  planProducts           PlanProduct[]
+
+  @@map("products")
+}
+
+model ContentItem {
+  id        String      @id @default(uuid())
+  productId String      @map("product_id")
+  type      ContentType
+  metadata  Json        // título, URL, texto, botões, etc.
+  sortOrder Int         @default(0) @map("sort_order")
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("content_items")
+}
+
+model Post {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  content   String   @db.Text
+  imageUrl  String?  @map("image_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comments Comment[]
+  likes    PostLike[]
+
+  @@map("posts")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String   @map("post_id")
+  userId    String   @map("user_id")
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model PostLike {
+  postId   String @map("post_id")
+  userId   String @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@map("post_likes")
+}
+
+model DevocionalDay {
+  id             String   @id @default(uuid())
+  productId      String   @map("product_id")
+  dayNumber      Int      @map("day_number")
+  theme          String
+  verse          String   @db.Text
+  wordOriginal   String?  @map("word_original")
+  wordMeaning    String?  @map("word_meaning") @db.Text
+  reflection     String   @db.Text
+  questions      Json     // array of strings
+  audioPrayerUrl String?  @map("audio_prayer_url")
+  sortOrder      Int      @default(0) @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, dayNumber])
+  @@map("devocional_days")
+}
+
+model KitSection {
+  id        String         @id @default(uuid())
+  productId String         @map("product_id")
+  sectionKey KitSectionKey  @map("section_key")
+  title     String
+  config    Json           // section-specific fields
+  sortOrder Int            @default(0) @map("sort_order")
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("kit_sections")
+}
+
+model CourseModule {
+  id          String   @id @default(uuid())
+  productId   String   @map("product_id")
+  title       String
+  description String?  @db.Text
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  product  Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  lessons  CourseLesson[]
+
+  @@map("course_modules")
+}
+
+model CourseLesson {
+  id               String   @id @default(uuid())
+  moduleId         String   @map("module_id")
+  title            String
+  videoUrl         String?  @map("video_url")
+  summary          String?  @db.Text
+  practicalQuestion String? @map("practical_question") @db.Text
+  durationMinutes  Int?     @map("duration_minutes")
+  sortOrder        Int      @default(0) @map("sort_order")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  module CourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@map("course_lessons")
+}
+
+model UserDevocionalProgress {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  productId  String   @map("product_id")
+  dayNumber  Int      @map("day_number")
+  completedAt DateTime @default(now()) @map("completed_at")
+  notes      String?  @db.Text
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId, dayNumber])
+  @@map("user_devocional_progress")
+}
+
+model UserKitProgress {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  productId      String   @map("product_id")
+  plannerChecks  Json     @map("planner_checks") // Record<string, boolean>
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("user_kit_progress")
+}
+
+model UserStreak {
+  id               String     @id @default(uuid())
+  userId           String     @map("user_id")
+  productId        String?    @map("product_id")
+  streakType       StreakType @map("streak_type")
+  currentStreak    Int         @default(0) @map("current_streak")
+  lastActivityDate DateTime   @map("last_activity_date") @db.Date
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId, streakType])
+  @@map("user_streaks")
+}
+
+model Badge {
+  id             String   @id @default(uuid())
+  productId      String?  @map("product_id")
+  code           String
+  name           String
+  description    String?  @db.Text
+  iconUrl        String?  @map("icon_url")
+  conditionType  String   @map("condition_type")
+  conditionValue Json     @map("condition_value")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  product   Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  userBadges UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  badgeId   String   @map("badge_id")
+  earnedAt  DateTime @default(now()) @map("earned_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@map("user_badges")
+}
+
+model NotificationPreference {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  enabled   Boolean          @default(true)
+  productId String?          @map("product_id")
+  createdAt DateTime        @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@map("notification_preferences")
+}
+
+model Plan {
+  id                          String   @id @default(uuid())
+  name                        String
+  description                 String?  @db.Text
+  externalProductIdMonthly    String?  @map("external_product_id_monthly")
+  externalProductIdSemiannual String?  @map("external_product_id_semiannual")
+  externalProductIdAnnual     String?  @map("external_product_id_annual")
+  sortOrder                   Int      @default(0) @map("sort_order")
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+
+  planProducts  PlanProduct[]
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model PlanProduct {
+  planId    String @map("plan_id")
+  productId String @map("product_id")
+
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([planId, productId])
+  @@map("plan_products")
+}
+
+model Subscription {
+  id                     String             @id @default(uuid())
+  userId                 String             @map("user_id")
+  planId                 String             @map("plan_id")
+  periodType             PeriodType         @map("period_type")
+  status                 SubscriptionStatus @default(active)
+  startsAt               DateTime           @map("starts_at")
+  expiresAt              DateTime           @map("expires_at")
+  externalTransactionId  String?            @map("external_transaction_id")
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model PwaSettings {
+  id                 String   @id @default(uuid())
+  appName            String   @map("app_name")
+  shortName          String   @map("short_name")
+  description        String?  @db.Text
+  themeColor         String   @map("theme_color")
+  backgroundColor    String   @map("background_color")
+  faviconUrl         String?  @map("favicon_url")
+  icon192Url         String?  @map("icon_192_url")
+  icon512Url         String?  @map("icon_512_url")
+  appleTouchIconUrl  String?  @map("apple_touch_icon_url")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("pwa_settings")
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  endpoint  String   @db.Text
+  p256dh    String   @db.Text
+  auth      String   @db.Text
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+  @@map("push_subscriptions")
+}
+
+model EmailSettings {
+  id        String   @id @default(uuid())
+  host      String   @db.VarChar(255)
+  port      Int      @default(587)
+  secure    Boolean  @default(false)
+  user      String?  @db.VarChar(255)
+  password  String?  @db.VarChar(500)
+  fromEmail String   @map("from_email") @db.VarChar(255)
+  fromName  String   @map("from_name") @db.VarChar(255)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("email_settings")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
