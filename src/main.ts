@@ -5,6 +5,13 @@ import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 
 async function bootstrap() {
+  // Timeout na conexão com o banco para não travar se o Supabase estiver inacessível (ex.: firewall, IP não liberado).
+  const dbUrl = process.env.DATABASE_URL;
+  if (dbUrl && !/connect_timeout=/i.test(dbUrl)) {
+    process.env.DATABASE_URL =
+      dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'connect_timeout=10';
+  }
+
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
